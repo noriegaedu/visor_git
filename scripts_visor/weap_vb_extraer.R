@@ -59,9 +59,9 @@ weap_vb_extraer <- function(directorio, var, estaciones, nom_salida){
   base <- paste('"Scenario"', '"Year"', '"TS"', sep = ' & "," & ') %>% 
     paste0(., ' & "," &')
   
-  head <- paste(base, 
-                paste0(var, est, 
-                       collapse = ' & "," & '))
+  #head <- paste(base, 
+  #              paste0(var, est, 
+  #                     collapse = ' & "," & '))
   
   head_q <- paste(base, 
                   paste0(var_q, est_q, 
