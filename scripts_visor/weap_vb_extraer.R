@@ -10,20 +10,23 @@
 #' Ej: 'ETP'
 #' @param estaciones ruta del archivo Excel exportado desde WEAP con la
 #' informacion a extraer 
-#' En WEAP ir a: al aprtado de DATA, uan vez alli Edit/Export Expression to Excel...
-#' en la ventana emrgente escoger 
+#' En WEAP ir al apartado DATA, del arbol de informacion escoger 'Demand and Catchments',
+#' En el panel de la derecha escoger 'Land Use/Area'
+#' Abrir de la barra de menu 'Edit/Export Expression to Excel...'
+#' en la ventana emergente escoger 
 #' - New Workbook 
 #' - All Branches
-#' - All Variables
+#' - Area Variables
 #' - Reference Scenario
-#' @param nom_salida ruta con el nombre del archivo de salida con extension 
-#' `.vsb`
+#' Guardar la salida de Excel y recordar la ruta.
+#' Ej. "H:/mmaya/proyectos_R/visor_git/datos_visor/BHSB_Modelo Nacional_Amazonica_Aug2018.xlsx"
+#' @param nom_salida ruta con el nombre del archivo de salida con extension `.vsb`
 #' 
 #' @example 
 #' weap_vb_extraer('bh', 
 #'                 'PCP', 
-#'                 "C:/Users/Gustavo Ayala/Documents/WEAP Areas/zongo_2/BHSB_Modelo_Nacional_Amazonica_Aug2018.xlsx", 
-#'                 "C:/Users/Gustavo Ayala/Documents/WEAP Areas/zongo_2/scripts/ejemplo.vbs")
+#'                 "H:/mmaya/proyectos_R/visor_git/datos_visor/BHSB_Modelo Nacional_Amazonica_Aug2018.xlsx", 
+#'                 "H:/mmaya/proyectos_R/visor_git/salidas_visor/ejemplo_PCP.vbs")
 #'                 
 weap_vb_extraer <- function(directorio, var, estaciones, nom_salida){
   require(dplyr)
