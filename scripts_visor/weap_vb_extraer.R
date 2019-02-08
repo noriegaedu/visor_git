@@ -61,7 +61,7 @@ weap_vb_extraer <- function(directorio, var, estaciones, nom_salida){
   
   #head <- paste(base, 
   #              paste0(var, est, 
-  #                     collapse = ' & "," & '))
+  #                    collapse = ' & "," & '))
   
   head_q <- paste(base, 
                   paste0(var_q, est_q, 
@@ -69,10 +69,10 @@ weap_vb_extraer <- function(directorio, var, estaciones, nom_salida){
   
   guardar <- paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
                      sapply(seq_along(est), 
-                            function(x) paste0('round(', 
-                                               paste0(var, est_variables)[x], ',2)/',
-                                               paste0(var_A, est_variables)[x],
-                                               '*1000'))), 
+                            function(x) paste0('round((', 
+                                               paste0(var, est_variables)[x], '/',
+                                               paste0(var_A, est_variables)[x],')',
+                                               '*1000,2)'))), 
                    collapse = ' & "," & ')
   
   # inicio de escritura de vbs
