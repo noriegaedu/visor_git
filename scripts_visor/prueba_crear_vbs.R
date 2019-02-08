@@ -14,13 +14,15 @@ directorio = 'bh'
 directorio <- paste0('"', directorio, '\\"')
 
 var <- 'PCP'
+#var_A <- 'A'
+var_A <- paste0('A', '_')
 var <- paste0(var, '_') # redundancia pero a flata de tiempo
 #var <- 'ETP_'
 #est <- c('Abapo', 'Abuna')
 
 if (var == 'ETP_') val_name <- ':ET Potential[m^3]'
 if (var == 'ETR_') val_name <- ':ET Actual[m^3]'
-if (var == 'A_') val_name <- ':Area Calculated[M^2]'
+val_name_A <- ':Area Calculated[M^2]'
 if (var == 'PCP_') val_name <- ':Observed Precipitation[m^3]'
 if (var == 'SR_') val_name <- ':Surface Runoff[m^3]'
 if (var == 'IN_') val_name <- ':Interflow[m^3]'
@@ -43,10 +45,11 @@ head_q <- paste(base,
 
 guardar <- paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
              sapply(seq_along(est), 
-                    function(x) paste0('round(', 
-                                       paste0(var, est_variables)[x], ',2)'))), 
+                    function(x) paste0('round(',
+                                       paste0(var, est_variables)[x], ',2)/',
+                                       paste0(var_A, est_variables)[x],
+                                       '*1000'))), 
              collapse = ' & "," & ')
-
 
 
 #head <- paste(paste('Scenario', 'Year', 'TS'), 
@@ -54,7 +57,7 @@ guardar <- paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'),
 #      collapse = '') %>% 
 #  gsub(' ', ' & , & ', .)
 
-con <- file("H:/mmaya/proyectos_R/visor_git/salidas_visor/ejemplo_PCP_2.vbs")
+con <- file("H:/mmaya/proyectos_R/visor_git/salidas_visor/ejemplo_PCP_3.vbs")
 
 writeLines(
   c('WEAP.ActiveScenario = "Reference"',
@@ -80,11 +83,17 @@ paste0(' z1 = ', head_q),
 ' For Mes = 1 to NumTimeSteps',
 '',
 sapply(seq_along(est), 
+       function(x) paste0(paste0(var_A, est_variables)[x], 
+                          ' = WEAP.ResultValue("Demand Sites and Catchments\\',
+                          est[x],
+                          val_name_A,'", Yr, Mes, WEAP.ActiveScenario)')),
+'',
+sapply(seq_along(est), 
        function(x) paste0(paste0(var, est_variables)[x], 
                          ' = WEAP.ResultValue("Demand Sites and Catchments\\',
                          est[x],
                          val_name,'", Yr, Mes, WEAP.ActiveScenario)')),
-  paste0('\nz1 = ', guardar),
+paste0('\nz1 = ', guardar),
 '',
 'objectFile.WriteLine z1',
 '',

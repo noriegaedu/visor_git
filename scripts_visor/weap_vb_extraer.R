@@ -7,7 +7,7 @@
 #' @param directorio carpeta donde se almacenara la info de salida
 #' Ej: 'bh'
 #' @param var variable de la que se obtendra la informacion
-#' Ej: 'ETP'
+#' Ej: 'ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF'
 #' @param estaciones ruta del archivo Excel exportado desde WEAP con la
 #' informacion a extraer 
 #' En WEAP ir al apartado DATA, del arbol de informacion escoger 'Demand and Catchments',
@@ -34,10 +34,13 @@ weap_vb_extraer <- function(directorio, var, estaciones, nom_salida){
   
   directorio <- paste0('"', directorio, '\\"')
   
+  var_A <- paste0('A', '_')
+  
   var <- paste0(var, '_')
   if (var == 'ETP_') val_name <- ':ET Potential[m^3]'
   if (var == 'ETR_') val_name <- ':ET Actual[m^3]'
-  if (var == 'A_') val_name <- ':Area Calculated[M^2]'
+  #if (var == 'A_') val_name <- ':Area Calculated[M^2]' # var comun para todas las otras var
+  val_name_A <- ':Area Calculated[M^2]' # para llevar a mm
   if (var == 'PCP_') val_name <- ':Observed Precipitation[m^3]'
   if (var == 'SR_') val_name <- ':Surface Runoff[m^3]'
   if (var == 'IN_') val_name <- ':Interflow[m^3]'
@@ -67,7 +70,9 @@ weap_vb_extraer <- function(directorio, var, estaciones, nom_salida){
   guardar <- paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
                      sapply(seq_along(est), 
                             function(x) paste0('round(', 
-                                               paste0(var, est_variables)[x], ',2)'))), 
+                                               paste0(var, est_variables)[x], ',2)/',
+                                               paste0(var_A, est_variables)[x],
+                                               '*1000'))), 
                    collapse = ' & "," & ')
   
   # inicio de escritura de vbs
@@ -95,6 +100,12 @@ weap_vb_extraer <- function(directorio, var, estaciones, nom_salida){
       '',
       'For Yr = (BaseYear+1) to EndYear',
       ' For Mes = 1 to NumTimeSteps',
+      '',
+      sapply(seq_along(est), 
+             function(x) paste0(paste0(var_A, est_variables)[x], 
+                                ' = WEAP.ResultValue("Demand Sites and Catchments\\',
+                                est[x],
+                                val_name_A,'", Yr, Mes, WEAP.ActiveScenario)')),
       '',
       sapply(seq_along(est), 
              function(x) paste0(paste0(var, est_variables)[x], 
