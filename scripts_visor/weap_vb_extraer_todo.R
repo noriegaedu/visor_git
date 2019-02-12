@@ -5,7 +5,7 @@
 #' 
 #' @param directorio carpeta donde se almacenara la info de salida
 #' Ej: 'bh'
-#' @param var vector con variables
+#' @param Var vector con variables
 #' *OJO* Por ahora en este orden: c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF')
 #' Ej: 'ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF'
 #' @param estaciones ruta del archivo Excel exportado desde WEAP con la
@@ -24,11 +24,11 @@
 #' 
 #' @example 
 #' weap_vb_extraer_todo(directorio = 'bh', 
-#'                      var = c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF'), 
+#'                      Var = c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF'), 
 #'                      estaciones = "H:/mmaya/proyectos_R/visor_git/datos_visor/BHSB_Modelo Nacional_Amazonica_Aug2018.xlsx", 
 #'                      nom_salida = "H:/mmaya/proyectos_R/visor_git/salidas_visor/TODO.vbs")  
 
-weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, var = c('ETP','ETR','PCP','SR','IN','BF')){
+weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, Var = c('ETP','ETR','PCP','SR','IN','BF')){
     require(dplyr)
     require(readxl)
     
@@ -36,13 +36,14 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, var = c('ET
     
     var_A <- paste0('A', '_')
     
-    #var <- c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF')
-    var <- paste0(var, '_')
+    #Var <- c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF')
+    Var <- paste0(Var, '_')
+    
+    val_name_A <- ':Area Calculated[M^2]' # para llevar a mm
     
     val_name <- c(':ET Potential[m^3]', ':ET Actual[m^3]', ':Observed Precipitation[m^3]', 
                   ':Surface Runoff[m^3]', ':Interflow[m^3]', ':Base Flow[m^3]')
     
-    aa <- paste0(var_A, est_variables)
     
     est <- read_xlsx(estaciones) %>% 
         pull(5) %>% unique() %>% na.omit() 
@@ -50,13 +51,15 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, var = c('ET
     
     est_variables <- est %>% gsub(' ', '_', .)
     
-    var_q <- paste0('"', var)
+    aa <- paste0(var_A, est_variables)
+    
+    var_q <- paste0('"', Var)
     est_q <- paste0(est, '"')
     
     base <- paste('"Scenario"', '"Year"', '"TS"', sep = ' & "," & ') %>% 
         paste0(., ' & "," &')
     
-    zz <- sapply(seq_along(var), 
+    zz <- sapply(seq_along(Var), 
                  function(y) paste(sapply(seq_along(est), 
                                           function(x) paste0(var_q[y], est_q[x], 
                                                              collapse = ' & "," & '))))
@@ -66,16 +69,16 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, var = c('ET
     writeLines(
         c('WEAP.ActiveScenario = "Reference"',
           '',
-          sapply(seq_along(var), 
+          sapply(seq_along(Var), 
                  function(x) paste0('salida', x, ' = WEAP.ActiveArea.Directory & ', 
                                     directorio,
                                     ' & "', 
-                                    paste0(gsub('_', '', var[x]),
+                                    paste0(gsub('_', '', Var[x]),
                                            '.csv"'))),
           '',
           'Set objFSO = CreateObject("Scripting.FileSystemObject")',
           '',
-          sapply(seq_along(var) , 
+          sapply(seq_along(Var) , 
                  function(x) paste0('if objFSO.FileExists(salida', x, ') then',
                                     '\n set objFile', x, '= objFSO.OpenTextFile(salida',x,', 8)',
                                     '\nElse',
@@ -105,7 +108,7 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, var = c('ET
                                     est[x],
                                     val_name,'", Yr, Mes, WEAP.ActiveScenario)')),
           '',
-          sapply(seq_along(var), 
+          sapply(seq_along(Var), 
                  function(y) paste0('z', y, ' = ', 
                                     paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
                                             sapply(seq_along(est), 
@@ -117,13 +120,13 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, var = c('ET
                                                                       '*1000,2)'))), 
                                           collapse = ' & "," & '))),
           '',
-          sapply(seq_along(var), 
+          sapply(seq_along(Var), 
                  function(x) paste0('objFile',x,'.WriteLine z',x)),
           '',
           ' Next',
           'Next',
           '',
-          sapply(seq_along(var), 
+          sapply(seq_along(Var), 
                  function(x) paste0('objFile',x,'.close'))),
         con)
     close(con)
