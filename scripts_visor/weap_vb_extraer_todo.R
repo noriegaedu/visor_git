@@ -49,7 +49,13 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, Var = c('ET
         pull(5) %>% unique() %>% na.omit() 
     est <- est[-1] # se elmina 'Level 2'
     
-    est_variables <- est %>% gsub(' ', '_', .)
+    est_variables <- est %>% 
+        gsub(' ', '_', .) #%>% 
+        #####
+        # gsub('.', '_', .) %>% 
+        # gsub('ñ', 'n', .) %>% 
+        # gsub('Ñ', 'N', .)
+    ####
     
     aa <- paste0(var_A, est_variables)
     
