@@ -18,8 +18,13 @@
 #' Ej. "C:/Users/HP/Documents/WEAP Areas/BHSB_Modelo Nacional_Amazonica_Aug2018/bh/"
 #' @param salida_shp Ruta de salida para los shapefiles asociados a cada variable modelada
 #' Ej. "C:/Users/HP/Documents/WEAP Areas/BHSB_Modelo Nacional_Amazonica_Aug2018/bh/shp/"
+#' @param corregir_ah Logico, si modelo fue corrido con anho inicial septiembre se debe corregir
+#' Ej. TRUE para corregir desfase de informacion de meses
+#' @param escribir_shp Logico, se da la opcion de ecribir los shapes de cada variable (TRUE) o no (FALSE)
+#' si es que ya se tienen escritos.
 #' 
-arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp){
+arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp, 
+                       corregir_ah = FALSE, escribir_shp = TRUE){
     
     require(tidyverse)
     require(sf)
@@ -69,11 +74,37 @@ arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp){
                                 check.names = FALSE) %>% 
         dplyr::select(-c(1:3)) 
     
-    fechas <- read.csv(paste0(var_csv,abr_var,'.csv')) %>% 
-        dplyr::select(2:3) %>% 
-        setNames(c('Year', 'Month'))
+    if (isFALSE(corregir_ah)) {
+        fechas <- read.csv(paste0(var_csv,abr_var,'.csv')) %>% 
+            dplyr::select(2:3) %>% 
+            setNames(c('Year', 'Month'))
+    }
     
-    
+    if (isTRUE(corregir_ah)) {
+        fechas <- read.csv(paste0(var_csv,abr_var,'.csv')) %>% 
+            dplyr::select(2:3) %>% 
+            setNames(c('Year', 'Month')) 
+        
+        anhos <- fechas$Year %>% unique()
+        ini <- anhos %>% head(1)
+        fin <- anhos %>% tail(1)
+        
+        fechas  <- fechas %>%  
+            mutate(Year = c(rep(ini - 1,4), 
+                            rep(seq(ini, fin - 1), each = 12), 
+                            rep(fin,8)),
+                   Month = rep(c(9:12,1:8), length(anhos)))
+        
+        # corregir salida de WEAP
+        read.csv(paste0(var_csv,abr_var,'.csv'), 
+                 check.names = FALSE) %>% 
+            mutate(Year = fechas$Year,
+                   TS = fechas$Month) %>% 
+            write.csv(paste0(var_csv,abr_var,'.csv'),
+                      row.names = FALSE)
+        
+    }
+
     write.csv(cbind(fechas, 
                     crear_csv_visor %>%
                         dplyr::select(sort(names(.)))) %>% 
@@ -81,7 +112,8 @@ arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp){
               paste0(salida, abr_var, '_visor.csv'),
               row.names = FALSE)
     
-    st_write(bhsb_shp_reducido, 
-             paste0(salida_shp, abr_var, '_visor.shp'))
-    
+    if (isTRUE(escribir_shp)) {
+        st_write(bhsb_shp_reducido, 
+                 paste0(salida_shp, abr_var, '_visor.shp'))
+    }
 }
