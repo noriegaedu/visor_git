@@ -30,7 +30,7 @@
 #' | Hidro Nujchu   | Rio Ravelo Bajo | Sist.Riego RaveloBajo Return | 1 |
 #' | NG_Canchi Mayu | Rio Canchi Mayu | Sist.Riego Canchimayu Return | 0 |
 #' 
-#' calibr("H:/mmaya/calibr_input_prueba.csv",
+#' calibr("H:/mmaya/datos_q_azero.csv",
 #'        "C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/PCP_visor.shp",
 #'        "C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/ravelo_calibr_solo2.shp",
 #'        reporte = TRUE,
