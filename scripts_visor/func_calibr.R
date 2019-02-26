@@ -18,6 +18,8 @@
 #' @param shp_calibr ruta para escribir shapefile de calibracion
 #' @param ruta_q ruta donde se enceuntran los archivos de caudal de WEAP
 #' @param corregir_ah logico, TRUE para corregir fechas por anho hidorlogico
+#' @param umbral_hueco numero que indica en m2 (para shapefiel en proyeccion geografica) el umbral por
+#' debajo del cual se eliminaran los huecos (voids) dentro de una subcuenca
 #'  
 #' @details dentro de la estructura de la funcion se presenta una funcion adicional llamada 'uh_calibr'
 #' esta funcion permite asociar la UH del reporte con las UH de la calibracion de forma interactiva
@@ -39,7 +41,8 @@
 #'        ruta_q = 'C:/Users/HP/Documents/WEAP Areas/BH Azero/bh/',
 #'        corregir_ah = TRUE)
 
-calibr <- function(datos_resumen, shp_reporte, shp_calibr, reportes = FALSE, 
+calibr <- function(datos_resumen, shp_reporte, shp_calibr, 
+                   umbral_hueco = 100, reportes = FALSE, 
                    ruta_entrada_reportes, ruta_salida_reportes, 
                    ruta_q, corregir_ah = FALSE){
     
@@ -79,7 +82,7 @@ calibr <- function(datos_resumen, shp_reporte, shp_calibr, reportes = FALSE,
                   PFAF_HYD_ = 999, 
                   OBSERV_ = NA, 
                   codigo = paste0('uhc', seq_along(nombres_features))) %>% 
-        fill_holes(threshold = 1) %>% # valore de threshold varaible. Anhadir argumento?
+        fill_holes(threshold = umbral_hueco) %>% # valore de threshold varaible
         st_write(shp_calibr)
     
     # otras varaibles difenrtes de Q
