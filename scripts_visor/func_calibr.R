@@ -45,6 +45,7 @@ calibr <- function(datos_resumen, shp_reporte, shp_calibr, reportes = FALSE,
     
     require(tidyverse)
     require(sf)
+    require(smoothr)
     
     nombres_features <- read.csv(datos_resumen, 
                                  header = FALSE, 
@@ -78,6 +79,7 @@ calibr <- function(datos_resumen, shp_reporte, shp_calibr, reportes = FALSE,
                   PFAF_HYD_ = 999, 
                   OBSERV_ = NA, 
                   codigo = paste0('uhc', seq_along(nombres_features))) %>% 
+        fill_holes(threshold = 1) %>% # valore de threshold varaible. Anhadir argumento?
         st_write(shp_calibr)
     
     # otras varaibles difenrtes de Q
