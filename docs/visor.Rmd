@@ -1,0 +1,857 @@
+---
+title: "Guía breve de preparación de datos para el Sistema de Disponibilidad Hídrica Superficial"
+author: "Eduardo Jesus Noriega Cabrera"
+date: "Febrero de 2019"
+output: 
+    pdf_document:
+        keep_tex: yes
+        number_sections: true
+        fig_caption: yes
+header-includes: 
+- \usepackage{float}
+
+
+lang: "es"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<!--```{r echo=FALSE}
+require(knitr)
+library(magick)
+opts_template$set(squarefigure = list(fig.height = 5.5, fig.width = 5.5))
+```
+opts.label='squarefigure'
+-->
+
+# Antecedentes
+
+El geovisor montado por MMAyA (disponible en <https://sys.sirh.gob.bo/>) agrupa los resultados de los balance hídricos de varias cuencas del territorio boliviano, presentándolos por Unidad Hidrográfica de Reporte y Calibración (modelación y calibración respectivamente) en un formato amigable para el usuario que pretenda obtener información básica de un área de interés.
+
+La información requerida para alimentar al geovisor se encuentra dentro de modelos hidrológicos realizados en **WEAP**[^1] de cada cuenca estudiada (ya sea modelada como macrocuenca o a menor escala). 
+
+# Alcance de esta guía
+
+Esta guía presenta y describe herramientas para extraer los resultados de las modelaciones hidrológicas que servirán como información de entrada para el geovisor.
+
+Las herramientas comprenden funciones escritas en **R** que permiten crear scripts en formato *.vbs* (Visual Basic Script, formato de scripts usado dentro de WEAP) y otras funciones que transforman, corrigen y dejan lista la información de las variables hidrológicas para ser usadas por el geovisor. Los archivos espaciales (delimitación de cuencas) también son creados con funciones, según los archivos de reporte y calibración de cada variable.
+
+# Herramientas
+
+Las herramientas creadas se dividen en dos tipos:
+
+1. Las que permiten la extracción de información desde WEAP; y
+2. las que generan los archivos para el visor modificando y corrigiendo las salidas de WEAP.
+
+Los herramientas producidas (scripts de **R**) están disponibles en el repositorio <https://github.com/noriegaedu/visor_git/tree/master/scripts_visor>.
+
+## Extracción de información desde WEAP
+
+Dentro de estas herramientas se diferencian las variables por unidad de reporte. Las variables *PCP*, *ETR*, *ETP*, *BF*, *IN* y *SR* serán presentadas en unidades de lámina de precipitación *[mm]* por lo que para su extracción desde WEAP es necesario dividir los resultados de cada unidad hidrológica entre su área correspondiente. Las variables de Caudal (observado y simulado) serán presentadas en unidades propias de la variable *[m3/s]* y su extracción desde WEAP se la hace directamente en estas unidades. 
+
+### Variables en lámina de precipitación 
+
+Se creó la función `weap_vb_extraer_todo()`:
+
+<!-- {#numCode .R .numberLines} -->
+
+```{r weap_extraer_todo, eval=FALSE}
+#' @author Eduardo Noriega
+#' 
+#' @description Modificado de 'weap_vb_extraer_varios.R'
+#' Con esta nueva funcion se permite generar un solo script vbs para varias variables
+#' 
+#' @param directorio carpeta donde se almacenara la info de salida
+#' Ej: 'bh'
+#' @param Var vector con variables
+#' *OJO* Por ahora en este orden: c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF')
+#' Ej: 'ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF'
+#' @param estaciones ruta del archivo Excel exportado desde WEAP con la
+#' informacion de las unidades hidrologicas: Para generar este archivos seguir estos
+#' pasos: 
+#' - En WEAP ir al apartado DATA, del arbol de informacion escoger 'Demand and Catchments',
+#' - En el panel de la derecha escoger 'Land Use/Area'
+#' - Abrir de la barra de menu 'Edit/Export Expression to Excel...'
+#'   en la ventana emergente escoger 
+#'   - New Workbook 
+#'   - All Branches
+#'   - Area Variables
+#'   - Reference Scenario
+#' - Guardar la salida de Excel y recordar la ruta.
+#' Ej. "./Balance Hidrico Ravelo FINAL.xlsx"
+#' @param nom_salida ruta con el nombre del archivo de salida con extension `.vbs`
+#' 
+#' @example 
+#' weap_vb_extraer_todo(directorio = 'bh', 
+#'                      Var = c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF'), 
+#'                      estaciones = "./Balance Hidrico Ravelo FINAL.xlsx", 
+#'                      nom_salida = "./ravelo_FINAL.vbs")  
+
+weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, 
+                                 Var = c('ETP','ETR','PCP','SR','IN','BF')){
+    require(dplyr)
+    require(readxl)
+    
+    directorio <- paste0('"', directorio, '\\"')
+    
+    var_A <- paste0('A', '_')
+    
+    Var <- paste0(Var, '_')
+    
+    val_name_A <- ':Area Calculated[M^2]' # para llevar a mm
+    
+    val_name <- c(':ET Potential[m^3]', ':ET Actual[m^3]', 
+                  ':Observed Precipitation[m^3]', ':Surface Runoff[m^3]', 
+                  ':Interflow[m^3]', ':Base Flow[m^3]')
+    
+    est <- read_xlsx(estaciones) %>% 
+        pull(5) %>% unique() %>% na.omit() 
+    est <- est[-1] # se elmina 'Level 2'
+    
+    est_variables <- est %>% 
+        gsub(' ', '_', .) 
+    
+    aa <- paste0(var_A, est_variables)
+    
+    var_q <- paste0('"', Var)
+    est_q <- paste0(est, '"')
+    
+    base <- paste('"Scenario"', '"Year"', '"TS"', sep = ' & "," & ') %>% 
+        paste0(., ' & "," &')
+    
+    zz <- sapply(seq_along(Var), 
+                 function(y) 
+                     paste(sapply(seq_along(est), 
+                                  function(x) paste0(var_q[y], est_q[x],
+                                                     collapse = ' & "," & '))))
+    # inicio de escritura de vbs
+    con <- file(nom_salida)
+    
+    writeLines(
+        c('WEAP.ActiveScenario = "Reference"',
+          '',
+          sapply(seq_along(Var), 
+                 function(x) paste0('salida', 
+                                    x, 
+                                    ' = WEAP.ActiveArea.Directory & ', 
+                                    directorio,
+                                    ' & "', 
+                                    paste0(gsub('_', '', Var[x]),
+                                           '.csv"'))),
+          '',
+          'Set objFSO = CreateObject("Scripting.FileSystemObject")',
+          '',
+          sapply(seq_along(Var) , 
+                 function(x) paste0('if objFSO.FileExists(salida', x, ') then',
+                                    '\n set objFile', x, 
+                                    '= objFSO.OpenTextFile(salida',x,', 8)',
+                                    '\nElse',
+                                    '\n set objFile', x, 
+                                    '= objFSO.CreateTextFile(salida',x,')',
+                                    paste0('\n z',x,' = ', base, ' ', 
+                                           paste(zz[,x], 
+                                                 collapse = ' & "," & ')),
+                                    '',
+                                    paste0('\nobjFile',x,'.WriteLine z',x),
+                                    '\nEnd If',
+                                    '\n')
+                 ),
+          '',
+          'For Yr = (BaseYear+1) to EndYear',
+          ' For Mes = 1 to NumTimeSteps',
+          '',
+          sapply(seq_along(est), 
+                 function(x) 
+                     paste0(paste0(var_A, est_variables)[x], 
+                                    ' = WEAP.ResultValue("Demand Sites and Catchments\\',
+                                    est[x],
+                                    val_name_A,'", Yr, Mes, WEAP.ActiveScenario)')),
+          '',
+          sapply(seq_along(est), 
+                 function(x) paste0(zz[x,] %>% 
+                                        gsub('"', '',.) %>% 
+                                        gsub(' ', '_',.), 
+                                    ' = WEAP.ResultValue("Demand Sites and Catchments\\',
+                                    est[x],
+                                    val_name,'", Yr, Mes, WEAP.ActiveScenario)')),
+          '',
+          sapply(seq_along(Var), 
+                 function(y) paste0('z', y, ' = ', 
+                                    paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
+                                            sapply(seq_along(est), 
+                                                   function(x) 
+                                                       paste0('round((', 
+                                                              zz[x,y] %>% 
+                                                                  gsub('"', '',.) %>% 
+                                                                  gsub(' ', '_',.), '/',
+                                                              aa[x],')',
+                                                              '*1000,2)'))), 
+                                          collapse = ' & "," & '))),
+          '',
+          sapply(seq_along(Var), 
+                 function(x) paste0('objFile',x,'.WriteLine z',x)),
+          '',
+          ' Next',
+          'Next',
+          '',
+          sapply(seq_along(Var), 
+                 function(x) paste0('objFile',x,'.close'))),
+        con)
+    close(con)
+}
+```
+<!--```{r xlsx_uh, echo=FALSE, fig.cap="(Izq.) Archivo xlsx con nombres de unidades hidrológicas. (Der.) Salida vbs luego de usar la funcion", out.width = '49%', fig.align='center', fig.pos='H', fig.show='hold'}
+knitr::include_graphics(c("H:/mmaya/proyectos_R/visor_git/docs/img/xlsx_uh.png",
+                          "H:/mmaya/proyectos_R/visor_git/docs/img/vbs_no_q.png"))
+
+```-->
+
+```{r xlsx_uh, echo=FALSE, fig.cap="Archivo xlsx con los nombres de las unidades hidrológicas.", out.width = '70%', fig.align='center', fig.pos='H'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/xlsx_uh.png")
+
+```
+
+La función crea un archivo *.vbs* que, dentro de WEAP, permite la extracción de la información de las variables *ETP*, *ETR*, *PCP*, *SR*, *IN* y *BF*. Cada argumento tiene una descripción pero a continuación se enumeran dos pasos previos antes de usar la función:
+
+1. Un archivo *.xlsx* extraído desde WEAP con la información de los nombres de cada *Catchment* (unidad hidrológica) presente dentro del modelo. Más detalles de este archivo se encuentra en la descripción de la función (buscar descripción del argumento **estaciones**). Ver la Figura \ref{fig:xlsx_uh}.
+<!--![](H:/mmaya/proyectos_R/visor_git/docs/img/xlsx_uh.png)-->
+2. Dentro de la carpeta de trabajo del modelo WEAP crear la carpeta *bh*. En esta carpeta se almacenarán los archivos de salida de WEAP.
+
+Una vez cargada la función, el siguiente código de ejemplo:
+
+```{r weap_mm, eval=FALSE}
+# Ravelo
+weap_vb_extraer_todo('bh',
+                     "./Balance Hidrico Ravelo FINAL.xlsx",
+                     "./ravelo_FINAL.vbs",
+                     Var = c('ETP', 'ETR', 'PCP', 'SR', 'IN', 'BF'))
+```
+
+```{r vbs_no_q, echo=FALSE, fig.cap="Salida vbs.", out.width = '70%', fig.align='center', fig.pos='H'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/vbs_no_q.png")
+```
+
+genera el archivo *.vbs* que se muestra en la Figura \ref{fig:vbs_no_q}.
+
+Desde WEAP, el archivo *.vbs* generado produce los archivos *ETP.csv*, *ETR.csv*, *PCP.csv*, *SR.csv*, *IN.csv* y *BF.csv* dentro de la carpeta *./bh*. Estos archivos muestran los resultados de cada unidad hidrológica en *[mm]* según el periodo en el que fue ejecutado el modelo (Ver Figura \ref{fig:salida_weap_mmTS}).
+
+```{r salida_weap_mmTS, echo=FALSE, fig.cap="Resultados extraidos desde WEAP con archivos vbs.", out.width = '80%', fig.align='center', fig.pos='h'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/salida_weap_mmTS.png")
+```
+
+\pagebreak
+
+### Caudal simulado y observado
+Se creó la función `weap_vb_extraer_Q()`:
+
+```{r weap_vb_extraer_Q, eval=FALSE}
+#' @author Edaurdo Noriega
+#' @description La funcion crea un archivo vbs (script de visual basic) para extraer 
+#' informacion de caudal observado o simulado en WEAP
+#' 
+#' @param directorio caracter, carpeta donde se guardaran la salida
+#' @param nom_salida ruta con el nombre para el archivo vbs 
+#' @param ctrl csv con la siguiente estructura (sin nombre de columnas):
+#' |-a-|-b-|-c-|-d-|
+#' |---|---|---|---|
+#' |---|---|---|---|
+#' a = nombre estacion hidrometrica (igual a nombre usado en WEAP)
+#'     Si no existe hidrometrica anhadir NG_ al inicio del nombre
+#' b = nombre rio donde esta la estacion hidrometrica
+#' c = Nodo (de WEAP) de donde se extrae informacion de caudal 
+#' d = Existe estacion hidrometrica para nodo del que se extrae 
+#'     informacion? Binario (1 o 0)
+#' @param sim_obs caracter para indicar que tipo de caudal se quiere extraer: 
+#' simulado ('sim') u observado ('obs').
+#' 
+#' @example 
+#'datos_resumen : 
+#' | Hidro Nujchu   | Rio Ravelo Bajo | Sist.Riego RaveloBajo Return | 1 |
+#' | NG_Canchi Mayu | Rio Canchi Mayu | Sist.Riego Canchimayu Return | 0 |
+#' 
+#' Con este ejemplo se genera el vbs para caudales simulados:
+#' weap_vb_extraer_Q('bh',
+#'                   'C:/Users/HP/Documents/WEAP Areas/prueba_q_ojo.vbs',
+#'                   "H:/mmaya/datos_q_ravelo.csv",
+#'                   sim_obs = 'sim')
+
+weap_vb_extraer_Q <- function(directorio, nom_salida, ctrl, sim_obs = 'sim'){
+    
+    base <- paste('"Scenario"', '"Year"', '"TS"', sep = ' & "," & ') %>% 
+        paste0(., ' & "," &')
+    
+    directorio <- paste0('"', directorio, '\\"')
+    
+    ctrl <- read.csv(ctrl, header = FALSE, stringsAsFactors = FALSE)
+    ctrl <- list(pto_ctrl = ctrl$V1,
+                 rio = ctrl$V2,
+                 nodo_ctrl = ctrl$V3,
+                 obs = ctrl$V4)
+    
+    head_q <- paste(base, 
+                    paste0(paste0('"',
+                                  ctrl$pto_ctrl %>% 
+                                      gsub(' ', '_', .), '"'), 
+                           collapse = ' & "," & '))
+    
+    if (sim_obs == 'sim') {
+        nombre_csv <- '"Q_sim.csv"'
+        extraccion <- sapply(seq_along(ctrl$pto_ctrl), 
+                             function(x) 
+                                 paste0(ctrl$pto_ctrl[x] %>% gsub(' ', '_', .), 
+                                        ' = WEAP.ResultValue("Supply and Resources',
+                                        '\\River\\',
+                                        ctrl$rio[x],
+                                        '\\Reaches\\Below ',
+                                        ctrl$nodo_ctrl[x],
+                                        ':Streamflow[CMS]", Yr, Mes,',
+                                        ' WEAP.ActiveScenario)'))
+    }
+    
+    if (sim_obs == 'obs') {
+        nombre_csv <- '"Q_obs.csv"'
+        extraccion <- sapply(seq_along(ctrl$pto_ctrl), 
+                             function(x)
+                                 ifelse(ctrl$obs[x] == 1, 
+                                        paste0(ctrl$pto_ctrl[x] %>%
+                                                   gsub(' ', '_', .),
+                                               ' = WEAP.ResultValue("Supply and Resources',
+                                               '\\River\\',
+                                               ctrl$rio[x],
+                                               '\\Streamflow Gauges\\',
+                                               ctrl$pto_ctrl[x],
+                                               ':Streamflow Data[CMS]", Yr, Mes,',
+                                               ' WEAP.ActiveScenario)'),
+                                        paste0(ctrl$pto_ctrl[x] %>% gsub(' ', '_', .), 
+                                               ' = -999')))
+    }
+    
+    con <- file(nom_salida)
+    
+    writeLines(
+        c('WEAP.ActiveScenario = "Reference"',
+          '',
+          paste0('salida1 = WEAP.ActiveArea.Directory & ', directorio, 
+                 ' & ', nombre_csv),
+          '',
+          'Set objFSO = CreateObject("Scripting.FileSystemObject")',
+          '',
+          'if objFSO.FileExists(salida1) then',
+          ' set objFile1 = objFSO.OpenTextFile(salida1, 8)',
+          'Else',
+          ' set objFile1 = objFSO.CreateTextFile(salida1)',
+          paste0(' z1 = ', head_q),
+          '',
+          'objFile1.WriteLine z1',
+          'End If',
+          '',
+          'For Yr = (BaseYear+1) to EndYear',
+          ' For Mes = 1 to NumTimeSteps',
+          '',
+          extraccion,
+          '',
+          paste0('\nz1 = ', paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
+                                    sapply(seq_along(ctrl$pto_ctrl), 
+                                           function(x) paste0('round(',
+                                                              ctrl$pto_ctrl[x] %>% 
+                                                                  gsub(' ', '_', .),
+                                                              ',2)'))), 
+                                  collapse = ' & "," & ')),
+          '',
+          'objFile1.WriteLine z1',
+          '',
+          ' Next',
+          'Next',
+          '',
+          'objFile1.close'),
+        con)
+    close(con)
+}
+```
+
+La función permite crear un archivo *.vbs* que, dentro de WEAP, permite la extracción de los resultados de las  variables Caudal Simulado y Caudal Observado. Cada argumento tiene su descripción pero a continuación se enumeran dos pasos previos antes de usar la función:
+
+1. Se necesita crear manualmente un archivo *.csv* según la descripción del argumento **ctrl**. Figura \ref{fig:csv_q_big}.
+2. Dentro de la carpeta del modelo WEAP de trabajo crear la carpeta *bh*. En esta carpeta se almacenarán los archivos de salida de WEAP.
+
+<!--![](H:/mmaya/proyectos_R/visor_git/docs/img/vbs_q_sim.png)-->
+<!--
+```{r vbs_q_sim_obs, echo=FALSE, fig.cap="Archivo csv con inforacion de hidrometria (Arriba). Salida vbs luego de usar la funcion: (Abajo Izq.) Caudal Observado y (Abajo Der.) Caudal Simulado", out.width = '100%', fig.align='center', fig.pos='h'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/vbs_q_sim_obs.png")
+```
+-->
+
+```{r csv_q_big, echo=FALSE, fig.cap="Archivo csv con información hidrómetrica.", out.width = '50%', fig.align='center', fig.pos='h'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/csv_q_big.png")
+```
+
+Una vez cargada la función, el siguiente bucle de ejemplo:
+
+```{r weap_q, eval=FALSE}
+# Ravelo
+simobs <- c('sim', 'obs')
+for (i in simobs) {
+    weap_vb_extraer_Q('bh',
+                      paste0('./ravelo_q_', i,'.vbs'),
+                      "./datos_q_ravelo.csv",
+                      sim_obs = i)
+}
+```
+
+```{r vbs_obs_sim, echo=FALSE, fig.cap="Salida vbs luego de usar la funcion: (Izq.) Caudal Observado y (Der.) Caudal Simulado.", out.width = '49%', fig.align='center', fig.pos='H', fig.show='hold'}
+knitr::include_graphics(c("H:/mmaya/proyectos_R/visor_git/docs/img/vbs_q_obs.png",
+                          "H:/mmaya/proyectos_R/visor_git/docs/img/vbs_q_sim.png"))
+
+```
+genera los archivos *.vbs* que se muestran en la Figura \ref{fig:vbs_obs_sim}. 
+
+Dentro de WEAP, los archivos *.vbs* generados producen los archivos *Q_sim.csv* y *Q_obs.csv*, los cuales muestran los resultados de cada punto de control (donde sea posible) en *[m3/s]* según el periodo en el que fue ejecutado el modelo. (Ver Figura \ref{fig:salida_weap_q}).
+
+```{r salida_weap_q, echo=FALSE, fig.cap="Resultados extraídos desde WEAP con archivos .vbs para el Caudal simulado.", out.width = '70%', fig.align='center', fig.pos='h'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/salida_weap_q.png")
+```
+
+\pagebreak
+
+## Generación de archivos
+
+En esta sección se agrupan las herramientas que permiten generar los archivos de reporte y calibración. 
+
+###  Archivos de reporte 
+
+Para generar los archivos de reporte se debe evaluar algunos aspectos de la información disponible del modelo:
+
+* Si el modelo fue ejecutado con el mes de inicio diferente a **Enero**, las fechas de las salidas generadas a partir de los archivos *.vbs* (figuras \ref{fig:salida_weap_mmTS} y \ref{fig:salida_weap_q}) estarán desfasadas respecto a las fechas de reporte. Esto se produce porque el modelo WEAP no distingue entre meses y pasos temporales (por este motivo en las figuras mencionadas no existe la columna **Month** pero si **TS**).
+* Se debe verificar la existencia de la delimitación de las cuencas dentro de los documentos del modelamiento de la cuenca de estudio (comúnmente en formato *.shp* y sus asociados). En caso de no existir se deberá generar uno con las mismas unidades hidrológicas de los archivos *.csv* generados a partir del modelo.
+
+La generación de los archivos de reporte (resultados del modelo y archivos de delimitación) que serán introducidos al visor son producidos por la función `arch_visor()`.
+
+```{r arch_visor, eval=FALSE}
+#' @author Eduardo Noriega
+#' 
+#' @description Funcion que permite generar archivos csv para alimentar a visor 
+#' 
+#' @param shp_cuencas shape con la informacion espacial de la cuenca modelada
+#' Usar el shapefile generado por WEAP
+#' Ej.shp_cuencas <- "./Cuenca_Cachimayu_UH_weap.shp"
+#' **OJO: Obsoleto**
+#' Si se desea usar un shapefile similar al generado por WEAP tener cuidado con errores
+#' al usar la funcion
+#' Dentro del codigo de esta funcion se incluye un pedazo de codigo que permite salvar 
+#' errores de lectura de cuencas dentro de shapefile no generado por WEAP. 
+#' Sin embargo no fiarse y revisar manualmente.
+#' Ej. shape no WEAP: "./Calibracion/SIG/CatchmentsNacional.shp"
+#' **OJO: Obsoleto**
+#' @param var_csv Ruta en la que se encuentran los archivos csv de las variables modeladas
+#' Ej. "./bh/"
+#' @param abr_var variable modelada de la cual obtener csv para visor
+#' EJ. 'PCP'
+#' @param salida Ruta de salidas de los archivos csv para visor
+#' Ej. "./bh/"
+#' @param salida_shp Ruta de salida para los shapefiles asociados a cada variable modelada
+#' Ej. "./bh/shp/"
+#' @param corregir_ah Logico, si modelo fue corrido con anho inicial diferente de Enero 
+#' se debe corregir las salidas generadas con vbs.
+#' Ej. TRUE para corregir desfase de informacion de meses
+#' @param escribir_shp Logico, se da la opcion de escribir los shapes de cada 
+#' variable (TRUE) o no (FALSE) si es que ya se tienen escritos.
+#' 
+arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp, 
+                       corregir_ah = FALSE, escribir_shp = TRUE){
+    
+    require(tidyverse)
+    require(sf)
+    
+    bhsb_shp <- st_read(shp_cuencas,
+                        stringsAsFactors = FALSE) 
+    
+    #verificar si: shp no tiene crs y si existen coordenadas negativas 
+    # (lo que indica que es proy geogr) entonces se asiga proy geogr a cuenca leida
+    if (is.na(st_crs(bhsb_shp)) & all(st_bbox(bhsb_shp) < 0)) {
+        bhsb_shp <- st_set_crs(bhsb_shp, 4326)
+    }
+    
+    # nombres cuencas: 
+    nombres_cuencas <- read.csv(paste0(var_csv,abr_var,'.csv'),
+                                check.names = FALSE) %>% names
+    nombres_cuencas <- nombres_cuencas[-c(1:3)] %>% gsub(paste0(abr_var, '_'), '', .)
+    
+    # seleccionar cuencas del shape en base a nombres de cuencas con informacion
+    bhsb_shp_reducido <- bhsb_shp %>% filter(Name %in% nombres_cuencas)
+    faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
+    
+    # **OJO: Obsoleto**
+    # # codigo para verificar nombres que no concuerdan entre los nombres de 
+    # # cuencas y nombres dentro del shape
+    # # ver descripcion
+    # while (length(faltantes) != 0) {
+    #     # loop para posicion de faltantes en un solo vector
+    #     pos_faltantes <- sapply(seq_along(faltantes), 
+    #                             function(x) return(agrep(setdiff(nombres_cuencas, 
+    #                                                              bhsb_shp_reducido$Name)[x], 
+    #                                                      bhsb_shp$Name))) # 
+    #     bhsb_shp[pos_faltantes,3] <- faltantes
+    #     
+    #     bhsb_shp_reducido <- bhsb_shp %>% filter(Name %in% nombres_cuencas) # se repite 
+    #                                                                         # para incluir 
+    #     faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
+    # }
+    #**OJO: Obsoleto**
+    
+    bhsb_shp_reducido <- bhsb_shp_reducido %>% 
+        arrange(Name) %>% 
+        transmute(NOMBRE = Name, 
+                  PFAF_HYD_ = 999, 
+                  OBSERV_ = NA, 
+                  codigo = paste0('uh', 1:nrow(.)), 
+                  Cuenca = Name)
+
+    crear_csv_visor <- read.csv(paste0(var_csv,abr_var,'.csv'), 
+                                check.names = FALSE) %>% 
+        dplyr::select(-c(1:3)) 
+    
+    if (isFALSE(corregir_ah)) {
+        fechas <- read.csv(paste0(var_csv,abr_var,'.csv')) %>% 
+            dplyr::select(2:3) %>% 
+            setNames(c('Year', 'Month'))
+    }
+    
+    if (isTRUE(corregir_ah)) {
+        fechas <- read.csv(paste0(var_csv,abr_var,'.csv')) %>% 
+            dplyr::select(2:3) %>% 
+            setNames(c('Year', 'Month')) 
+        
+        anhos <- fechas$Year %>% unique()
+        ini <- anhos %>% head(1)
+        fin <- anhos %>% tail(1)
+        
+        fechas  <- fechas %>%  
+            mutate(Year = c(rep(ini - 1,4), 
+                            rep(seq(ini, fin - 1), each = 12), 
+                            rep(fin,8)),
+                   Month = rep(c(9:12,1:8), length(anhos)))
+        
+        # corregir salida de WEAP
+        read.csv(paste0(var_csv,abr_var,'.csv'), 
+                 check.names = FALSE) %>% 
+            mutate(Year = fechas$Year,
+                   TS = fechas$Month) %>% 
+            write.csv(paste0(var_csv,abr_var,'.csv'),
+                      row.names = FALSE)
+    }
+
+    write.csv(cbind(fechas, 
+                    crear_csv_visor %>%
+                        dplyr::select(sort(names(.)))) %>% 
+                  setNames(., c('Year', 'Month', bhsb_shp_reducido$codigo)), 
+              paste0(salida, abr_var, '_visor.csv'),
+              row.names = FALSE)
+    
+    if (isTRUE(escribir_shp)) {
+        st_write(bhsb_shp_reducido, 
+                 paste0(salida_shp, abr_var, '_visor.shp'))
+    }
+}
+```
+
+Con el siguiente bucle se generan los archivos de reporte y los archivos de delimitación en formato *.shp*. Cualquier archivo de delimitación generado puede ser usado como capa base dentro del geovisor.
+
+```{r loop_visor, eval=FALSE}
+# Ravelo
+shp_cuencas <- "./Cuenca_Cachimayu_UH_weap.shp"
+var_csv <- "./bh/"
+salida <- "./bh/"
+salida_shp <- "./bh/shp/"
+corregir_ah <- TRUE
+escribir_shp <- TRUE
+
+variables <- c('BF', 'ETP', 'ETR', 'IN', 'PCP', 'SR')
+
+for (i in variables) {
+    arch_visor(shp_cuencas, var_csv, i, salida, salida_shp, corregir_ah, escribir_shp)
+}
+
+# para escurrimiento
+library(tidyverse)
+lis_esc <- list.files(salida, pattern = 'visor', full.names = TRUE) %>% 
+    grep('BF_visor|IN_visor|SR_visor', ., value = TRUE) %>% 
+    lapply(function(x) read.csv(x, stringsAsFactors = FALSE)) %>% 
+    Reduce('+', .)
+
+lis_esc[,1:2] <- lis_esc[,1:2]/3L
+
+write.csv(lis_esc, paste0(salida, 'esc_visor.csv'), row.names = FALSE)
+```
+
+En la primera parte del ejemplo anterior se generan los archivos *ETP_visor.csv*, *ETR_visor.csv*, *PCP_visor.csv*, *SR_visor.csv*, *IN_visor.csv* y *BF_visor.csv*. Ver figura \ref{fig:visor_reporte}. Además, a partir de *SR_visor.csv*, *IN_visor.csv* y *BF_visor.csv* en la segunda parte del ejemplo se genera el archivo *esc_visor.csv* que corresponde a la variable Escurrimiento en lámina de precipitación *[mm]*. 
+
+```{r visor_reporte, echo=FALSE, fig.cap="Archivo csv de reporte", out.width = '75%', fig.align='center', fig.pos='h'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/visor_reporte.png")
+```
+
+Nótese que en la figura \ref{fig:visor_reporte} los nombres de las unidades hidrológicas han sido modificados. Este renombramiento coincide con cada componente dentro del archivo de delimitación de cuenca. En la figura \ref{fig:mapa_uh} se muestra la representación espacial del archivo de delimitación generado y en el cuadro \ref{tab:tabla_mapa_uh} se muestran los datos del archivo de delimitación generado.
+
+```{r mapa_uh, echo=FALSE, fig.cap="Representación espacial del archivo de delimitación generado", warning=FALSE, message=FALSE, fig.align='center', fig.pos='H', fig.height=4}
+library(sf)
+library(ggplot2)
+base <- st_read("C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/PCP_visor.shp",
+                quiet = TRUE)
+base_ <- st_set_geometry(base, NULL)
+# par(mfrow = c(1,2))
+ggplot(base) + 
+    geom_sf(aes(fill = Cuenca)) + 
+    geom_sf_label(aes(label = codigo)) + 
+    labs(x = '', y = '') +
+    scale_fill_brewer(palette = "Paired")
+# plot(st_geometry(base), axes = TRUE, graticule = TRUE, xlim = c(-65.9,-65.1))
+```
+
+```{r tabla_mapa_uh, echo=FALSE, fig.pos='H', warning=FALSE}
+library(sf)
+base <- st_read("C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/PCP_visor.shp",
+                quiet = TRUE)
+base_ <- st_set_geometry(base, NULL)
+knitr::kable(base_, caption = "\\label{tab:tabla_mapa_uh}Tabla asociada al archivo de delimitación generado.")
+```
+
+### Archivos de calibración
+
+Al igual que para los archivos de reporte, los archivos generados de Caudal (simulado y observado) pueden estar desfasados temporalmente si es que el modelo hidrológico fue ejecutado con el mes de inicio diferente a **Enero**. Para corregir esto se usa la función `csv_q_visor()`.
+
+```{r csv_q_visor, eval=FALSE}
+#' @author Eduardo Noriega
+#' @description La funcion prepara las salidas de WEAP para caudal con la opcion 
+#' de corregir las fechas por anho hidrologico
+#' 
+#' @param ruta_q ruta donde se encuentran los archivos de caudal de WEAP
+#' @param corregir_ah logico, TRUE para corregir fechas por anho hidorlogico
+#' 
+#' @example 
+#' csv_q_visor('C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh', 
+#'             TRUE)
+
+csv_q_visor <- function(ruta_q, corregir_ah){
+    
+    qs <- list.files(ruta_q,
+                     pattern = 'Q_', full.names = TRUE) %>% 
+        lapply(read.csv, check.names = FALSE)
+    qs_names <- list.files(ruta_q,
+                           pattern = 'Q_', full.names = TRUE) %>% gsub('.csv', '', .)
+    
+    if (isFALSE(corregir_ah)) {
+        fechas <- lapply(qs, function(x) dplyr::select(x, 2:3)) %>% 
+            lapply(function(x) setNames(x, c('Year', 'Month')))
+    }
+    
+    if (isTRUE(corregir_ah)) {
+        fechas <- lapply(qs, function(x) dplyr::select(x, 2:3)) %>% 
+            lapply(function(x) setNames(x, c('Year', 'Month')))
+        
+        anhos <- fechas[[1]]$Year %>% unique()
+        ini <- anhos %>% head(1)
+        fin <- anhos %>% tail(1)
+        
+        fechas <- lapply(qs, function(x) dplyr::select(x, 2:3)) %>% 
+            lapply(function(x) setNames(x, c('Year', 'Month'))) %>% 
+            lapply(function(x) mutate(x, Year = c(rep(ini - 1,4), 
+                                                  rep(seq(ini, fin - 1), each = 12), 
+                                                  rep(fin,8)),
+                                      Month = rep(c(9:12,1:8), length(anhos))))
+        
+        # corregir salida de WEAP
+        qs_orig <- qs %>% 
+            lapply(function(x) mutate(x, Year = fechas[[1]]$Year,
+                                      TS = fechas[[1]]$Month))
+        mapply(function(x, y) write.csv(x, y, row.names = FALSE), 
+               x = qs_orig, y = paste0(qs_names, '.csv'))
+        
+    }
+    
+    datos <- lapply(qs, function(x) dplyr::select(x, -c(1:3))) %>% 
+        lapply(function(x) replace(x, x == -999, '')) %>% 
+        lapply(function(x) setNames(x, paste0('uhc', seq_along(qs))))
+    
+    csv <- lapply(seq_along(qs), function(x) cbind(fechas[[x]], datos[[x]]))
+    
+    mapply(function(x, y) write.csv(x, y, row.names = FALSE), 
+           x = csv, y = paste0(qs_names, '_visor.csv'))
+    
+}
+```
+
+Luego del siguiente código de ejemplo:
+
+```{r ejemplo_csv_q_visor, eval=FALSE}
+# Ravelo
+csv_q_visor('./bh', TRUE)
+```
+
+```{r salida_weap_q_caorregido, echo=FALSE, fig.align='center', fig.pos='h', out.width='60%', fig.cap="Archivo de caudal simulado corergido por desfase de fechas."}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/salida_weap_q_caorregido.png")
+```
+
+se generan los archivos corregidos para la variable Caudal (observado y simulado). Figura \ref{fig:salida_weap_q_caorregido}. 
+
+Luego, a diferencia de los archivos generados para el reporte, los archivos a generar para la calibración no cuentan con un archivo de delimitación de cuenca hasta los puntos donde existe una estación hidrométrica con información. Por este motivo se debe generar los archivos de delimitación a partir de los archivos de delimitación de reporte. Para este trabajo sera de utilidad el archivo *.csv* mostrado en la figura \ref{fig:csv_q_big}. 
+
+<!-- \pagebreak -->
+
+Con la función `calibr()` se crean los archivos de delimitación de las cuencas de calibración y se preparan los archivos de calibración. Si es necesario corregir por desfase temporal usar la función `csv_q_visor()` antes que la función `calibr()`.
+
+```{r calibr, eval=FALSE}
+#' @author Eduardo Noriega
+#' 
+#' @description La funcion permite crear un shapefile de calibracion en base a un 
+#' shapefile de reporte de un balance hidrico
+#' 
+#' @param datos_resumen csv con la siguiente estructura (sin nombre de columnas)
+#' |-a-|-b-|-c-|-d-|
+#' |---|---|---|---|
+#' |---|---|---|---|
+#' a = nombre estacion hidrometrica (igual a nombre usado en WEAP)
+#'     Si no existe hidrometrica anhadir NG_ al inicio del nombre
+#' b = nombre rio donde esta la estacion hidrometrica
+#' c = Nodo (de WEAP) de donde se extrae informacion de caudal 
+#' d = Existe estacion hidrometrica para nodo del que se extrae informacion? 
+#' Binario (1 o 0)
+#' @param shp_reporte ruta del shapefile de reporte de la cuenca (el que fue usado 
+#' para visor)
+#' @param shp_calibr ruta para escribir shapefile de calibracion
+#' 
+#' @details dentro de la estructura de la funcion se presenta una funcion 
+#' adicional llamada 'uh_calibr()'
+#' Esta funcion permite asociar la UH del reporte con las UH de la calibracion de 
+#' forma interactiva. Al ser llamada, la funcion itera a traves de la cantidad de 
+#' datos (cantidad de uh de calibracion) del archivo 'datos_resumen'. Para cada dato 
+#' se pide intrducir el numero de UH del reporte que le corresponde a cada UH de calibracion 
+#' separado por espacios.
+#' 
+#' @example 
+#' datos_resumen : 
+#' | Hidro Nujchu   | Rio Ravelo Bajo | Sist.Riego RaveloBajo Return | 1 |
+#' | NG_Canchi Mayu | Rio Canchi Mayu | Sist.Riego Canchimayu Return | 0 |
+#' 
+#' calibr("./calibr_input_prueba.csv",
+#'        "./bh/shp/PCP_visor.shp",
+#'        "./bh/shp/ravelo_calibr_solo2.shp",
+#'        reporte = TRUE,
+#'        "./bh/", 
+#'        ./bh/")
+
+calibr <- function(datos_resumen, shp_reporte, shp_calibr, 
+                   reportes = FALSE, ruta_entrada_reportes, ruta_salida_reportes){
+    
+    require(tidyverse)
+    require(sf)
+    
+    nombres_features <- read.csv(datos_resumen, 
+                                 header = FALSE, 
+                                 stringsAsFactors = FALSE) %>% 
+        pull(1)
+    
+    shp_reporte <- st_read(shp_reporte, quiet = TRUE)
+    
+    # funcion uh_calibr()
+    uh_calibr <- function(){
+      message('UH de Reporte de shp que corresponden a cada UH para shp de Calibracion:')
+        uh <- lapply(seq_along(nombres_features), 
+                     function(x) readline(paste0('UH para "', 
+                                                 nombres_features[x], 
+                                                 '" = '))) %>% 
+            lapply(function(x) as.numeric(unlist(strsplit(x, ' ')))) %>%
+            lapply(function(x) paste0('uh', x)) %>% 
+            setNames(nombres_features)
+        return(uh)
+    }
+    
+    uh <- uh_calibr()
+    
+    lapply(seq_along(nombres_features), 
+           function(x) shp_reporte %>%
+               filter(codigo %in% uh[[x]]) %>% # si basado en shp original usar Name
+               st_union() %>% 
+               st_sf(Name = names(uh)[x], .)) %>%
+        do.call(rbind, .) %>% 
+        transmute(NOMBRE = Name, 
+                  PFAF_HYD_ = 999, 
+                  OBSERV_ = NA, 
+                  codigo = paste0('uhc', seq_along(nombres_features))) %>% 
+        st_write(shp_calibr)
+    
+    if (reportes == TRUE) {
+        reportes_csv <- list.files(ruta_entrada_reportes, 
+                                   pattern = 'visor', full.names = TRUE) %>% 
+            lapply(read.csv)
+        reportes_names <- list.files(ruta_entrada_reportes, 
+                                     pattern = 'visor', 
+                                     full.names = FALSE) %>% gsub('.csv', '', .)
+        
+        reportes_calibr <- reportes_csv %>% 
+            lapply(function(y) lapply(seq_along(uh), 
+                                      function(x) dplyr::select(y, uh[[x]])) %>% 
+                       lapply(function(x) apply(x, 1, sum)) %>% 
+                       setNames(paste0('uhc', seq_along(uh))) %>% 
+                       do.call(cbind, .) %>%
+                       cbind(y[1:2], .)) %>%
+            setNames(reportes_names)
+        
+        mapply(function(x, y) write.csv(x, y, row.names = FALSE), 
+               x = reportes_calibr, 
+               y = paste0(ruta_salida_reportes, 
+                          names(reportes_calibr), 
+                          '_calibr.csv'))
+        }
+}
+```
+
+```{r interaccion, echo=FALSE, fig.pos='H', fig.align='center', out.width='80%', fig.cap='Interacción entre usuario y función para asociar UH de calibración.'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/interactivo.png")
+```
+
+En el siguiente ejemplo:
+
+```{r ejemplo_calibr, eval=FALSE}
+calibr("./datos_q_ravelo.csv",
+        "./bh/shp/PCP_visor.shp",
+        "./bh/shp/ravelo_calibr_solo2.shp",
+        TRUE,
+        "./bh/", 
+        "./bh/")
+```
+
+se genera en la consola una aplicación interactiva con el usuario. <!-- aqui va la imagen de interaccion -->En esta pantalla (figura \ref{fig:interaccion}) se le pide al usuario que asocie las unidades hidrológicas del modelo ejecutado con las unidades hidrológicas para la calibración basado en la cantidad de datos del archivo *.csv* de resumen de datos (figura \ref{fig:csv_q_big}). Se ingresan números enteros separados por espacios según el código asociado a cada unidad hidrológica de la tabla del archivo de delimitación de reporte. 
+
+Al terminar de ser ejecutada, si el argumento `reporte == TRUE`, la función genera los archivos *Q_obs_visor.csv* y *Q_sim_visor.csv* (ver figura \ref{fig:q_visor_calibracion}) y asociado a estos, el archivo de delimitación asociado a los archivos (figura \ref{fig:mapa_uh_calibracion} y cuadro \ref{tab:tabla_mapa_uh_calibracion}).  
+
+```{r q_visor_calibracion, echo=FALSE, fig.pos='h', fig.align='center', out.width='70%', fig.cap='Archivo csv de calibracion.'}
+knitr::include_graphics("H:/mmaya/proyectos_R/visor_git/docs/img/q_visor.png")
+```
+
+```{r mapa_uh_calibracion, echo=FALSE, fig.cap="Representación gráfica del archivo de delimitación generado para calibración.", warning=FALSE, message=FALSE, fig.align='center', fig.pos='H', fig.height=4}
+library(sf)
+library(ggplot2)
+base <- st_read("C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/ravelo_calibr_solo2.shp",
+                quiet = TRUE)
+base_ <- st_set_geometry(base, NULL)
+# par(mfrow = c(1,2))
+ggplot(base) + 
+    geom_sf(aes(fill = NOMBRE)) + 
+    geom_sf_label(aes(label = codigo)) + 
+    labs(x = '', y = '') +
+    scale_fill_brewer(palette = "Dark2")
+# plot(st_geometry(base), axes = TRUE, graticule = TRUE, xlim = c(-65.9,-65.1))
+```
+
+```{r tabla_mapa_uh_calibracion, echo=FALSE, fig.pos='H', warning=FALSE}
+library(sf)
+base <- st_read("C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/ravelo_calibr_solo2.shp",
+                quiet = TRUE)
+base_ <- st_set_geometry(base, NULL)
+knitr::kable(base_, caption = "\\label{tab:tabla_mapa_uh_calibracion}Tabla asociada al archivo de delimitación generado para calibración.")
+```
+
+
+
+[^1]: WEAP: Water Evaluating And Planning System, Stockholm Environment Institute.
