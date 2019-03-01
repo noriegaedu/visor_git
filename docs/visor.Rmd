@@ -1,6 +1,7 @@
 ---
 title: "Guía breve de preparación de datos para el Sistema de Disponibilidad Hídrica Superficial"
-author: "Eduardo Jesus Noriega Cabrera"
+subtitle: "versión 0.4"
+author: "MMAYA/DGP/UEE"
 date: "Febrero de 2019"
 output: 
     pdf_document:
@@ -28,17 +29,109 @@ opts.label='squarefigure'
 
 # Antecedentes
 
-El geovisor montado por MMAyA (disponible en <https://sys.sirh.gob.bo/>) agrupa los resultados de los balance hídricos de varias cuencas del territorio boliviano, presentándolos por Unidad Hidrográfica de Reporte y Calibración (modelación y calibración respectivamente) en un formato amigable para el usuario que pretenda obtener información básica de un área de interés.
+El geovisor montado por MMAyA (disponible en <https://sys.sirh.gob.bo/>) agrupa los resultados de los balances hídricos de varias cuencas del territorio boliviano, presentándolos por Unidad Hidrográfica de Reporte y Calibración (modelación y calibración respectivamente) en un formato amigable para el usuario que pretenda obtener información hidrológica básica de un área de interés.
 
-La información requerida para alimentar al geovisor se encuentra dentro de modelos hidrológicos realizados en **WEAP**[^1] de cada cuenca estudiada (ya sea modelada como macrocuenca o a menor escala). 
+Un balance hídrico es una herramienta para evaluar cuantitativamente los recursos hídricos de una unidad geográfica a nivel temporal y espacial. Para tal objetivo es necesario lograr un equilibrio entre la cantidad de agua que entra y sale de una unidad geográfica sin que esta reciba aportes externos en un periodo dado de tiempo.
+
+A partir de lo anterior se deduce la importancia de contar con información accesible para la sociedad y espacialmente para los sectores que interactúan con agua dentro de sus actividades económicas y/o sociales.
+
+<!-- Lo anterior se traduce matematicamente en una ecuacion que deb ser balanceada en el tiempo: -->
+
+<!-- \begin{center} -->
+<!-- $P + Qimp = (Qs + Qss + Qsubt) + (ET + E) \pm \Delta S$ -->
+<!-- \end{center} -->
 
 # Alcance de esta guía
 
-Esta guía presenta y describe herramientas para extraer los resultados de las modelaciones hidrológicas que servirán como información de entrada para el geovisor.
+El balance hídrico puede realizarse a través de métodos manuales o mediante modelación matemática, en cualquier caso, la presentación de resultados deberá seguir un formato estandarizado. En esta guía se presentan los formatos en los cuales deberán presentarse los resultados de las diferentes variables que intervienen dentro del balance hídrico. 
+
+Si el balance hídrico fue realizado en la plataforma **WEAP**[^1] mas adelante en esta guía se presentan
+<!-- La información requerida para alimentar al geovisor se encuentra dentro de modelos hidrológicos realizados en **WEAP**[^1] de cada cuenca estudiada (ya sea modelada como macrocuenca o a menor escala).  -->
+y describen herramientas para extraer los resultados de esta plataforma y que servirán como información de entrada para el geovisor.
 
 Las herramientas comprenden funciones escritas en **R** que permiten crear scripts en formato *.vbs* (Visual Basic Script, formato de scripts usado dentro de WEAP) y otras funciones que transforman, corrigen y dejan lista la información de las variables hidrológicas para ser usadas por el geovisor. Los archivos espaciales (delimitación de cuencas) también son creados con funciones, según los archivos de reporte y calibración de cada variable.
 
+<!-- También se incluye una sección en la que se explica la forma de presentación de datos: -->
+
+<!-- * Formato de archivos *.csv*: resultados de reporte y calibración. -->
+<!-- * Formato de archivos *.shp*: delimitación de cuencas de reporte y calibración. -->
+
+# Variables de reporte y calibración
+
+Como mínimo, los resultados que deberán ser presentados como el producto de la elaboración de un balance hídrico serán los siguientes:
+
+* Precipitación, **[PCP]**. 
+* Evapotranspiración potencial, **[ETP]**.
+* Evapotranspiración real, **[ETR]**.
+* Escurrimiento, **[esc]**.
+* Caudal observado, **[Q_obs]**.
+* Caudal simulado, **[Q_sim]**.
+
+Para *PCP*, *ETP*, *ETR* y *esc* se presentarán los resultados en $[mm]$ por unidad hidrológica modelada, tomando en cuenta que el Escurrimiento [*esc*] se considera como la sumatoria del escurrimientos superficial **[SR]**, subsuperficial **[IN]** y base **[BF]**. 
+
+Para *Q_obs* se presentarán los datos de cada estación hidrométrica usada para la calibración y junto a  *Q_sim* se generarán nuevas unidades hidrológicas con punto de control en las estaciones hidrométricas existentes para reportar sus resultados en $m^3/s$. Además, para las nuevas unidades hidrológicas creadas se presentaran los resultados de *PCP*, *ETP*, *ETR* y *esc* en $[mm]$.
+
+# Formatos de presentación
+## Resultados en lámina de precipitación $[mm]$
+
+Se presentaran los resultados de este tipo de variables según el cuadro \ref{tab:tabla_formato_mm_csv}.
+
+```{r ej_reporte, echo=FALSE}
+ej_reporte <- head(read.csv("H:/mmaya/proyectos_R/visor_git/docs/PCP_visor.csv"))
+knitr::kable(ej_reporte, caption = "\\label{tab:tabla_formato_mm_csv}Formato para archivos csv para vairables en $[mm]$.")
+```
+
+Se incluirán las columnas `Year`, `Month` y el código de cada unidad hidrológica. Este código deberá ser la concatenación entre el termino **uh** y un numero único que identifique a cada unidad hidrológica, y deberá corresponder a cada subcuenca del archivo de delimitación espacial.
+
+## Resultados para caudal $[m^3/s]$
+
+Se presentarán los resultados de este tipo de variables según el cuadro \ref{tab:tabla_formato_mm3_S_csv}.
+
+```{r ej_calibr, echo=FALSE}
+ej_calibr <- head(read.csv("H:/mmaya/proyectos_R/visor_git/docs/PCP_visor_calibr.csv"))
+knitr::kable(ej_calibr, caption = "\\label{tab:tabla_formato_mm3_S_csv}Formato para archivos csv para varaibles en $[m^3/s]$.")
+
+```
+
+Se incluirán las columnas `Year`, `Month` y el código de cada unidad hidrológica de calibración codificada. Este código deberá ser la concatenación entre el termino **uhc** y un numero único que identifique a cada unidad hidrológica de calibración, y deberá corresponder a cada subcuenca del archivo de delimitación espacial de calibración.
+
+## Archivos de delimitación espacial
+
+Estos archivos serán presentados en formato *shapefile* (*.shp*, junto a sus archivos complementarios) con información mostrada en el cuadro \ref{tab:tabla_shp_reporte} para variables de reporte y en el cuadro \ref{tab:tabla_shp_calibr} para variables de calibración.
+
+Para los archivos de delimitación espacial de reporte (cuadro \ref{tab:tabla_shp_reporte}) se incluirán las columnas: 
+
+1. `NOMBRE` con el nombre de la subcuenca utilizando como prefijo el termino **UH**.
+2. `PFAF_HYD_` con la identificación Pfafstetter de la subcuenca. 
+3. `OBSERV_`, 
+4. `codigo` con la concatenación del termino **uh** y un numero único de identificación de la subcuenca.
+5. `Cuenca` idéntica a `NOMBRE`. 
+
+```{r tabla_shp_reporte, echo=FALSE, message=FALSE, warning=FALSE}
+library(sf)
+library(tidyverse)
+shp_tabla_reporte <- st_read("C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/ETP_visor.shp", quiet = TRUE) %>% 
+    st_set_geometry(NULL)
+knitr::kable(shp_tabla_reporte, caption = "\\label{tab:tabla_shp_reporte}Tabla asociada al archivo de delimitacion (shp) para variables de reporte.")
+```
+
+Mientras que para los archivos de delimitación espacial de calibración (cuadro \ref{tab:tabla_shp_calibr}) se incluirán las columnas: 
+
+1. `NOMBRE` con el nombre de la subcuenca. En caso de que la cuenca de calibración cuente con una estación hidrométrica añadir el prefijo **Hidro** al nombre de la estación hidrométrica de control de lo contrario añadir el prefijo **NG_** al nombre de la subcuenca que se encuentre a la salida de la cuenca de calibración.
+2. `codigo` con la concatenación del termino **uhc** y un numero único de identificación de la subcuenca.
+
+```{r tabla_shp_calibr, echo=FALSE, message=FALSE, warning=FALSE}
+library(sf)
+library(tidyverse)
+shp_tabla_calibr <- st_read("C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/ravelo_calibr.shp", quiet = TRUE) %>% 
+    st_set_geometry(NULL) %>% 
+    dplyr::select(NOMBRE, codigo)
+knitr::kable(shp_tabla_calibr, caption = "\\label{tab:tabla_shp_calibr}Tabla asociada al archivo de delimitacion (shp) para variables de calibracion.")
+```
+
 # Herramientas
+
+Si para la elaboración del balance hídrico se usó la plataforma WEAP para la modelación hidrológica, a continuación se presentan y explican algunas herramientas para la presentación de resultados.
 
 Las herramientas creadas se dividen en dos tipos:
 
@@ -784,8 +877,9 @@ calibr <- function(datos_resumen, shp_reporte, shp_calibr,
                st_sf(Name = names(uh)[x], .)) %>%
         do.call(rbind, .) %>% 
         transmute(NOMBRE = Name, 
-                  PFAF_HYD_ = 999, 
-                  OBSERV_ = NA, 
+                  # PFAF_HYD_ = 999, 
+                  # OBSERV_ = NA, 
+                  # Cuenca = Name,
                   codigo = paste0('uhc', seq_along(nombres_features))) %>% 
         fill_holes(threshold = umbral_hueco) %>% # valore de threshold varaible
         st_write(shp_calibr)
@@ -903,14 +997,15 @@ ggplot(base) +
 # plot(st_geometry(base), axes = TRUE, graticule = TRUE, xlim = c(-65.9,-65.1))
 ```
 
-```{r tabla_mapa_uh_calibracion, echo=FALSE, fig.pos='H', warning=FALSE}
+```{r tabla_mapa_uh_calibracion, echo=FALSE, fig.pos='H', warning=FALSE, message=FALSE}
 library(sf)
+library(tidyverse)
 base <- st_read("C:/Users/HP/Documents/WEAP Areas/Balance Hidrico Ravelo FINAL/bh/shp/ravelo_calibr.shp",
                 quiet = TRUE)
-base_ <- st_set_geometry(base, NULL)
+base_ <- st_set_geometry(base, NULL) %>% 
+    dplyr::select(NOMBRE, codigo)
 knitr::kable(base_, caption = "\\label{tab:tabla_mapa_uh_calibracion}Tabla asociada al archivo de delimitación generado para calibración.")
 ```
-
 
 
 [^1]: WEAP: Water Evaluating And Planning System, Stockholm Environment Institute.
