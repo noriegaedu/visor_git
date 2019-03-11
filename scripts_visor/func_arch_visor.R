@@ -37,7 +37,7 @@ arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp,
     # entonces se asigan proy geogr a cuenca leida
     if (is.na(st_crs(bhsb_shp)) & all(st_bbox(bhsb_shp) < 0)) bhsb_shp <- st_set_crs(bhsb_shp, 4326)
     
-    # nombres cuencas bhsb2017: 
+    # nombres cuencas: 
     nombres_cuencas <- read.csv(paste0(var_csv,abr_var,'.csv'),
                                 check.names = FALSE) %>% names
     nombres_cuencas <- nombres_cuencas[-c(1:3)] %>% gsub(paste0(abr_var, '_'), '', .)
@@ -45,21 +45,57 @@ arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp,
     # seleccionar cuencas del shape BHSB2017 en base a nombres de cuencas con informacion
     
     bhsb_shp_reducido <- bhsb_shp %>% filter(Name %in% nombres_cuencas)
+    
     faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
     
-    # codigo para verificar nombres que no concuerdan entre los nombres de cuencas y nombres dentro del shape
-    # ver descripcion
-    while (length(faltantes) != 0) {
-        pos_faltantes <- sapply(seq_along(faltantes), 
-                                function(x) return(agrep(setdiff(nombres_cuencas, 
-                                                                 bhsb_shp_reducido$Name)[x], 
-                                                         bhsb_shp$Name))) # loop para posicion de faltantes en un solo vector
-        bhsb_shp[pos_faltantes,3] <- faltantes
+    # # codigo para verificar nombres que no concuerdan entre los nombres de cuencas y nombres dentro del shape
+    # # ver descripcion
+    # while (length(faltantes) != 0) {
+    #     pos_faltantes <- sapply(seq_along(faltantes),
+    #                             function(x) return(agrep(setdiff(nombres_cuencas,
+    #                                                              bhsb_shp_reducido$Name)[x],
+    #                                                      bhsb_shp$Name))) # loop para posicion de faltantes en un solo vector
+    #     bhsb_shp[pos_faltantes,3] <- faltantes
+    # 
+    #     bhsb_shp_reducido <- bhsb_shp %>% filter(Name %in% nombres_cuencas) # se repite para incluir
+    # 
+    #     faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
+    # 
+    # }
+    # 
+    
+    # si existe faltantes
+    if (length(faltantes) != 0) {
+
+        # correccion manual de nombres de shp y xlsx
+        cat('**************************** \nNombres que no se encuentran en shapefile \n****************************')
+        print(faltantes)
+        cat('**************************** \nNombres que no se encuentran en shapefile \n****************************\n')
         
-        bhsb_shp_reducido <- bhsb_shp %>% filter(Name %in% nombres_cuencas) # se repite para incluir 
+        menu_opcion <- menu(c('Tratar de corregir reemplazando caracteres en lista de faltantes', 
+               'Corregir fuera de R'), 
+             title = 'Que desea hacer?')  
         
-        faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
+        if (menu_opcion == 1) {
+            str_buscar <- readline('Que caracteres se buscaran? ')
+            str_reemplazar <- readline('Con que caracteres se reemplazaran? ')
+            
+            faltantes_comparar <- faltantes %>% gsub(str_buscar, str_reemplazar, .)
+            
+            pos_faltantes <- sapply(seq_along(faltantes),
+                                    function(x) return(which(bhsb_shp$Name == faltantes_comparar[x]))) # loop para posicion de faltantes en un solo vector
+
+            bhsb_shp[pos_faltantes,3] <- faltantes
+            
+            # comprobacion
+            bhsb_shp_reducido <- bhsb_shp %>% filter(Name %in% nombres_cuencas)
+            faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
+            if (length(faltantes != 0)) { stop('Aun no se corrigio los nombres de las cuencas. Creacion de archivos y shapefiles visor fallo')}
+        }
         
+        if (menu_opcion == 2) {
+            stop('Codigo termino aqui. No se crearon archivos para visor.')
+        }
     }
     
     bhsb_shp_reducido <- bhsb_shp_reducido %>% 
