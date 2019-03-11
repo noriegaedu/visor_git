@@ -49,7 +49,7 @@ Si el balance hídrico fue realizado en la plataforma **WEAP**[^1] mas adelante 
 <!-- La información requerida para alimentar al geovisor se encuentra dentro de modelos hidrológicos realizados en **WEAP**[^1] de cada cuenca estudiada (ya sea modelada como macrocuenca o a menor escala).  -->
 y describen herramientas para extraer los resultados de esta plataforma y que servirán como información de entrada para el geovisor.
 
-Las herramientas comprenden funciones escritas en **R**[^2] que permiten crear scripts en formato *.vbs* (Visual Basic Script, formato de scripts usado dentro de WEAP) y otras funciones que transforman, corrigen y dejan lista la información de las variables hidrológicas para ser usadas por el geovisor. Los archivos espaciales (delimitación de cuencas) también son creados con funciones, según los archivos de reporte y calibración de cada variable.
+Las herramientas comprenden funciones escritas en **R** (`v.3.5.0` o posterior)[^2] que permiten crear scripts en formato *.vbs* (Visual Basic Script, formato de scripts usado dentro de WEAP) y otras funciones que transforman, corrigen y dejan lista la información de las variables hidrológicas para ser usadas por el geovisor. Los archivos espaciales (delimitación de cuencas) también son creados con funciones, según los archivos de reporte y calibración de cada variable.
 
 <!-- También se incluye una sección en la que se explica la forma de presentación de datos: -->
 
@@ -142,6 +142,18 @@ Las herramientas creadas se dividen en dos tipos:
 
 Los herramientas producidas (scripts de **R**) están disponibles en el repositorio <https://github.com/noriegaedu/visor_git/tree/master/scripts_visor>.
 
+Para usar las heramientas (funciones) es necesario tener instalados algunos paquetes dentro de la sesión de **R**. Para esto, el siguiente fragmento de código instala las librerías faltantes dentro de la sesión actual[^3]:. 
+
+```{r librerias, eval=FALSE}
+paquetes <- c('tidyverse', # manejo de informacion tabular
+              'sf', # manejo de informacion espacial
+              'smoothr', # edicion de informacion espacial
+              'readxl') # lectura de archivos Excel
+paquetes_nuevos <- paquetes[!(paquetes %in% installed.packages()[,"Package"])]
+
+if(length(paquetes_nuevos)) install.packages(paquetes_nuevos)
+```
+
 ## Extracción de información desde WEAP
 
 Dentro de estas herramientas se diferencian las variables por unidad de reporte. Las variables *PCP*, *ETR*, *ETP*, *BF*, *IN* y *SR* serán presentadas en unidades de lámina de precipitación *[mm]* por lo que para su extracción desde WEAP es necesario dividir los resultados de cada unidad hidrológica entre su área correspondiente. Las variables de Caudal (observado y simulado) serán presentadas en unidades propias de la variable *[m3/s]* y su extracción desde WEAP se la hace directamente en estas unidades. 
@@ -187,7 +199,7 @@ Se creó la función `weap_vb_extraer_todo()`:
 
 weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, 
                                  Var = c('ETP','ETR','PCP','SR','IN','BF')){
-    require(dplyr)
+    require(tidyverse)
     require(readxl)
     
     directorio <- paste0('"', directorio, '\\"')
@@ -369,11 +381,13 @@ Se creó la función `weap_vb_extraer_Q()`:
 #' 
 #' Con este ejemplo se genera el vbs para caudales simulados:
 #' weap_vb_extraer_Q('bh',
-#'                   'C:/Users/HP/Documents/WEAP Areas/prueba_q_ojo.vbs',
-#'                   "H:/mmaya/datos_q_ravelo.csv",
+#'                   './prueba_q_ojo.vbs',
+#'                   "./datos_q_ravelo.csv",
 #'                   sim_obs = 'sim')
 
 weap_vb_extraer_Q <- function(directorio, nom_salida, ctrl, sim_obs = 'sim'){
+    
+    require(tidyverse)
     
     base <- paste('"Scenario"', '"Year"', '"TS"', sep = ' & "," & ') %>% 
         paste0(., ' & "," &')
@@ -520,9 +534,7 @@ En esta sección se agrupan las herramientas que permiten generar los archivos d
 Para generar los archivos de reporte se debe evaluar algunos aspectos de la información disponible del modelo:
 
 * Si el modelo fue ejecutado con el mes de inicio diferente a **Enero**, las fechas de las salidas generadas a partir de los archivos *.vbs* (figuras \ref{fig:salida_weap_mmTS} y \ref{fig:salida_weap_q}) estarán desfasadas respecto a las fechas de reporte. Esto se produce porque el modelo WEAP no distingue entre meses y pasos temporales (por este motivo en las figuras mencionadas no existe la columna **Month** pero si **TS**).
-* Se debe verificar la existencia de la delimitación de las cuencas dentro de los documentos del modelamiento de la cuenca de estudio (comúnmente en formato *.shp* y sus asociados). En caso de no existir se deberá generar uno **con las mismas unidades hidrológicas** de los archivos *.csv* generados a partir del modelo[^3].
-
-[^3]: Se modificó `arch_visor()` para incluir un primer intento de arreglar los nombres de las unidades hidrológicas del shapefile. Ver los detalles de la función.
+* Se debe verificar la existencia de la delimitación de las cuencas dentro de los documentos del modelamiento de la cuenca de estudio (comúnmente en formato *.shp* y sus asociados). En caso de no existir se deberá generar uno **con las mismas unidades hidrológicas** de los archivos *.csv* generados a partir del modelo[^4].
 
 La generación de los archivos de reporte (resultados del modelo y archivos de delimitación) que serán introducidos al visor son producidos por la función `arch_visor()`. 
 
@@ -1064,3 +1076,5 @@ knitr::kable(base_, caption = "\\label{tab:tabla_mapa_uh_calibracion}Tabla asoci
 
 [^1]: WEAP: Water Evaluating And Planning System, Stockholm Environment Institute.
 [^2]: Programa infórmatico de descarga libre en <https://www.r-project.org/>.
+[^3]: Para la instalación de librerías se necesita conexión a internet.
+[^4]: Se modificó `arch_visor()` para incluir un primer intento de arreglar los nombres de las unidades hidrológicas del shapefile. Ver los detalles de la función.
