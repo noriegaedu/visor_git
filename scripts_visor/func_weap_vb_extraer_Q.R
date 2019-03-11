@@ -27,6 +27,8 @@
 
 weap_vb_extraer_Q <- function(directorio, nom_salida, ctrl, sim_obs = 'sim'){
     
+    require(tidyverse)
+    
     base <- paste('"Scenario"', '"Year"', '"TS"', sep = ' & "," & ') %>% 
         paste0(., ' & "," &')
     

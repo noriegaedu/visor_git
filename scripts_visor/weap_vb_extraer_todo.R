@@ -29,7 +29,7 @@
 #'                      nom_salida = "H:/mmaya/proyectos_R/visor_git/salidas_visor/TODO.vbs")  
 
 weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, Var = c('ETP','ETR','PCP','SR','IN','BF')){
-    require(dplyr)
+    require(tidyverse)
     require(readxl)
     
     directorio <- paste0('"', directorio, '\\"')
