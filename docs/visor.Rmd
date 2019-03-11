@@ -1,8 +1,8 @@
 ---
 title: "Guía breve de preparación de datos para el Sistema de Disponibilidad Hídrica Superficial"
-subtitle: "versión 0.4"
-author: "MMAYA/DGP/UEE"
-date: "Febrero de 2019"
+subtitle: "versión 0.7"
+author: "MMAyA/DGP/UEE"
+date: "`r format(Sys.time(), '%B %Y')`"
 output: 
     pdf_document:
         keep_tex: yes
@@ -67,7 +67,7 @@ Como mínimo, los resultados que deberán ser presentados como el producto de la
 * Caudal observado, **[Q_obs]**.
 * Caudal simulado, **[Q_sim]**.
 
-Para *PCP*, *ETP*, *ETR* y *esc* se presentarán los resultados en $[mm]$ por unidad hidrológica modelada, tomando en cuenta que el Escurrimiento [*esc*] se considera como la sumatoria del escurrimientos superficial **[SR]**, subsuperficial **[IN]** y base **[BF]** según lo descrito por @yates1996watbal. Si se usa otra estructura de modelacion para el escurrimiento o descarga (caudal) se deberá explicar su formulación y hacer una analogia con las variables descritas en @yates1996watbal.
+Para *PCP*, *ETP*, *ETR* y *esc* se presentarán los resultados en $[mm]$ por unidad hidrológica modelada, tomando en cuenta que el Escurrimiento [*esc*] se considera como la sumatoria del escurrimientos superficial **[SR]**, subsuperficial **[IN]** y base **[BF]** según lo descrito por @yates1996watbal. Si se usa otra estructura de modelacion para el escurrimiento o descarga (caudal en lámina) se deberá explicar su formulación y ajustar la estructura previamente mencionada acorde al modelo utilizado para obtener el caudal en lámina a la salida de la cuenca.
 
 Para *Q_obs* se presentarán los datos de cada estación hidrométrica usada para la calibración y junto a  *Q_sim* se generarán nuevas unidades hidrológicas con punto de control en las estaciones hidrométricas existentes para reportar sus resultados en $m^3/s$. Además, para las nuevas unidades hidrológicas creadas se presentaran los resultados de *PCP*, *ETP*, *ETR* y *esc* en $[mm]$.
 
@@ -520,9 +520,11 @@ En esta sección se agrupan las herramientas que permiten generar los archivos d
 Para generar los archivos de reporte se debe evaluar algunos aspectos de la información disponible del modelo:
 
 * Si el modelo fue ejecutado con el mes de inicio diferente a **Enero**, las fechas de las salidas generadas a partir de los archivos *.vbs* (figuras \ref{fig:salida_weap_mmTS} y \ref{fig:salida_weap_q}) estarán desfasadas respecto a las fechas de reporte. Esto se produce porque el modelo WEAP no distingue entre meses y pasos temporales (por este motivo en las figuras mencionadas no existe la columna **Month** pero si **TS**).
-* Se debe verificar la existencia de la delimitación de las cuencas dentro de los documentos del modelamiento de la cuenca de estudio (comúnmente en formato *.shp* y sus asociados). En caso de no existir se deberá generar uno con las mismas unidades hidrológicas de los archivos *.csv* generados a partir del modelo.
+* Se debe verificar la existencia de la delimitación de las cuencas dentro de los documentos del modelamiento de la cuenca de estudio (comúnmente en formato *.shp* y sus asociados). En caso de no existir se deberá generar uno **con las mismas unidades hidrológicas** de los archivos *.csv* generados a partir del modelo[^3].
 
-La generación de los archivos de reporte (resultados del modelo y archivos de delimitación) que serán introducidos al visor son producidos por la función `arch_visor()`.
+[^3]: Se modificó `arch_visor()` para incluir un primer intento de arreglar los nombres de las unidades hidrológicas del shapefile. Ver los detalles de la función.
+
+La generación de los archivos de reporte (resultados del modelo y archivos de delimitación) que serán introducidos al visor son producidos por la función `arch_visor()`. 
 
 ```{r arch_visor, eval=FALSE}
 #' @author Eduardo Noriega
@@ -554,6 +556,13 @@ La generación de los archivos de reporte (resultados del modelo y archivos de d
 #' @param escribir_shp Logico, se da la opcion de escribir los shapes de cada 
 #' variable (TRUE) o no (FALSE) si es que ya se tienen escritos.
 #' 
+#' @details Se incluyo un pedazo de codigo para tratar de arreglar los nombres de las 
+#' unidades hidrologicas que no coinciden con los nombres reportardos en los archivos
+#' csv generados desde WEAP. Si los nombres son casi iguales con alguna difenrencia
+#' comun (un sufijo o prefijo) se puede buscar y reemplazar esta difenrecia comun.
+#' Dado que la funcion esta escrita para una sola varaible a la vez se debe hacer 
+#' esta operacion para cada variable que se desee reportar.
+
 arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp, 
                        corregir_ah = FALSE, escribir_shp = TRUE){
     
@@ -595,6 +604,46 @@ arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp,
     #     faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
     # }
     #**OJO: Obsoleto**
+    
+    # si existe faltantes
+    if (length(faltantes) != 0) {
+
+        # correccion manual de nombres de shp y xlsx
+        cat('******* \nNombres que no se encuentran en shapefile \n*******')
+        print(faltantes)
+        cat('******* \nNombres que no se encuentran en shapefile \n*******\n')
+        
+        menu_opcion <- menu(
+            c('Tratar de corregir reemplazando caracteres en lista de faltantes', 
+               'Corregir fuera de R'), 
+             title = 'Que desea hacer?')  
+        
+        if (menu_opcion == 1) {
+            str_buscar <- readline('Que caracteres se buscaran? ')
+            str_reemplazar <- readline('Con que caracteres se reemplazaran? ')
+            
+            faltantes_comparar <- faltantes %>% gsub(str_buscar, str_reemplazar, .)
+            
+            pos_faltantes <- sapply(seq_along(faltantes),
+                                    function(x) 
+                                        return(which(bhsb_shp$Name == faltantes_comparar[x]))) 
+                # loop para posicion de faltantes en un solo vector
+
+            bhsb_shp[pos_faltantes,3] <- faltantes
+            
+            # comprobacion
+            bhsb_shp_reducido <- bhsb_shp %>% filter(Name %in% nombres_cuencas)
+            faltantes <- setdiff(nombres_cuencas, bhsb_shp_reducido$Name)
+            
+            if (length(faltantes != 0)) 
+            { stop('Aun no se corrigio los nombres de las cuencas. 
+                       Creacion de archivos y shapefiles visor fallo')}
+        }
+        
+        if (menu_opcion == 2) {
+            stop('Codigo termino aqui. No se crearon archivos para visor.')
+        }
+    }
     
     bhsb_shp_reducido <- bhsb_shp_reducido %>% 
         arrange(Name) %>% 
