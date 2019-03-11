@@ -81,7 +81,8 @@ calibr <- function(datos_resumen, shp_reporte, shp_calibr,
         transmute(NOMBRE = Name, 
                   PFAF_HYD_ = 999, 
                   OBSERV_ = NA, 
-                  codigo = paste0('uhc', seq_along(nombres_features))) %>% 
+                  codigo = paste0('uhc', seq_along(nombres_features)),
+                  Cuenca = Name) %>% 
         fill_holes(threshold = umbral_hueco) %>% # valore de threshold varaible
         st_write(shp_calibr)
     
