@@ -23,6 +23,13 @@
 #' @param escribir_shp Logico, se da la opcion de ecribir los shapes de cada variable (TRUE) o no (FALSE)
 #' si es que ya se tienen escritos.
 #' 
+#' @details Se incluyo un pedazo de codigo para tratar de arreglar los nombres de las 
+#' unidades hidrologicas que no coinciden con los nombres reportardos en los archivos
+#' csv generados desde WEAP. Si los nombres son casi iguales con alguna difenrencia
+#' comun (un sufijo o prefijo) se puede buscar y reemplazar esta difenrecia comun.
+#' Dado que la funcion esta escrita para una sola varaible a la vez se debe hacer 
+#' esta operacion para cada variable que se desee reportar.
+#' 
 arch_visor <- function(shp_cuencas, var_csv, abr_var, salida, salida_shp, 
                        corregir_ah = FALSE, escribir_shp = TRUE){
     
