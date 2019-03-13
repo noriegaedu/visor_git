@@ -1,0 +1,10 @@
+V0.8 (aun no publicada)
+====
+- PENDIENTE: corregir bug en `func_calibr()`. Para sumar en unidades de lamina [mm], al juntar subcuencas de reporte para formar la subcuenca de calibracion, se debe ponderar por el porcentaje de area correspondiente a cada subcuneca. 
+v0.7
+====
+- se anhadio codigo para cargar y/o instalar las librerias faltantes
+- se incluyo referencias a version de R 
+v0.1 - v0.6
+===========
+- Version inicial y modificaciones menores (para mas detalles ver el historial de cambios en repositorio)
