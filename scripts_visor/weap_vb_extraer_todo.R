@@ -41,7 +41,9 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, Var = c('ET
     
     val_name_A <- ':Area Calculated[M^2]' # para llevar a mm
     
-    val_name <- c(':ET Potential[m^3]', ':ET Actual[m^3]', ':Observed Precipitation[m^3]', 
+    # val_name <- c(':ET Potential[m^3]', ':ET Actual[m^3]', ':Observed Precipitation[m^3]', 
+    #               ':Surface Runoff[m^3]', ':Interflow[m^3]', ':Base Flow[m^3]')
+    val_name <- c(':Reference PET[m]', ':ET Actual[m^3]', ':Observed Precipitation[m^3]', 
                   ':Surface Runoff[m^3]', ':Interflow[m^3]', ':Base Flow[m^3]')
     
     
@@ -114,7 +116,17 @@ weap_vb_extraer_todo <- function(directorio, estaciones, nom_salida, Var = c('ET
                                     est[x],
                                     val_name,'", Yr, Mes, WEAP.ActiveScenario)')),
           '',
-          sapply(seq_along(Var), 
+          sapply(seq_along(Var[1]), # ETP no se divide entre area
+                 function(y) paste0('z', y, ' = ', 
+                                    paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
+                                            sapply(seq_along(est), 
+                                                   function(x) paste0('round(', 
+                                                                      zz[x,y] %>% 
+                                                                          gsub('"', '',.) %>% 
+                                                                          gsub(' ', '_',.),
+                                                                      '*1000,2)'))), 
+                                          collapse = ' & "," & '))),
+          sapply(seq_along(Var[-1]), # ETP no se divide entre area
                  function(y) paste0('z', y, ' = ', 
                                     paste(c(c('WEAP.ActiveScenario', 'Yr', 'Mes'), 
                                             sapply(seq_along(est), 
