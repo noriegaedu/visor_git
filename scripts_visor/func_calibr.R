@@ -20,6 +20,10 @@
 #' @param corregir_ah logico, TRUE para corregir fechas por anho hidorlogico
 #' @param umbral_hueco numero que indica en m2 (para shapefiel en proyeccion geografica) el umbral por
 #' debajo del cual se eliminaran los huecos (voids) dentro de una subcuenca
+#' @param ruta_area ruta del archivos csv con la inforaion de areas de las unidades hidrologicas.
+#' el archivo csv tendra el siguietne formato con los valores en m2:
+#' | UH a | UH b | ... |
+#' | .... | .... | ... |
 #'  
 #' @details dentro de la estructura de la funcion se presenta una funcion adicional llamada 'uh_calibr'
 #' esta funcion permite asociar la UH del reporte con las UH de la calibracion de forma interactiva
