@@ -44,7 +44,7 @@
 calibr <- function(datos_resumen, shp_reporte, shp_calibr, 
                    umbral_hueco = 100, reportes = FALSE, 
                    ruta_entrada_reportes, ruta_salida_reportes, 
-                   ruta_q, corregir_ah = FALSE){
+                   ruta_q, corregir_ah = FALSE, ruta_area){
     
     require(tidyverse)
     require(sf)
@@ -89,17 +89,32 @@ calibr <- function(datos_resumen, shp_reporte, shp_calibr,
     # otras varaibles difenrtes de Q
     
     if (reportes == TRUE) {
+        
+        areas <- read.csv(ruta_area) %>% 
+            dplyr::select(sort(names(.))) %>% 
+            setNames(paste0('uh',seq_along(names(.))))
+        areas_sep <- lapply(seq_along(uh),
+                             function(x) dplyr::select(areas, uh[[x]]))
+        porcentaje <- mapply(function(x, y) x/y, x = areas_sep, y = areas_sep %>% sapply(sum))
+        
         reportes_csv <- list.files(ruta_entrada_reportes, 
                                    pattern = 'visor', full.names = TRUE) %>% 
             # grep('esc_visor|PCP_visor|ETR_visor|ETP_visor|BF_visor|IN_visor|SR_visor', ., value = TRUE)
             lapply(read.csv)
+        
+        # reportes_csv <- asd[c(9,11)] %>% lapply(read.csv)
+        
         reportes_names <- list.files(ruta_entrada_reportes, 
                                      pattern = 'visor', 
                                      full.names = FALSE) %>% gsub('.csv', '', .)
         
         reportes_calibr <- reportes_csv %>% 
             lapply(function(y) lapply(seq_along(uh), 
-                                      function(x) dplyr::select(y, uh[[x]])) %>% 
+                                      function(x) dplyr::select(y, uh[[x]])) %>%
+                       
+                       mapply(function(u, v) as.matrix(u) %*% diag(v), # para multiplicar cada grupo de calibracion por el porcentaje de area correspondiente
+                              u = ., v = porcentaje) %>% 
+                              
                        lapply(function(x) apply(x, 1, sum)) %>% 
                        setNames(paste0('uhc', seq_along(uh))) %>% 
                        do.call(cbind, .) %>%
